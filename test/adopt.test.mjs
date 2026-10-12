@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, tmuxSession } from "../lib/adopt.mjs";
+import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, tmuxSession, tmuxNames } from "../lib/adopt.mjs";
 
 const CEO = "d7dba841-a246-4186-9c74-da1d8534d610";
 const STALE = "6d9b917b-1779-49d0-b95b-ad36f8a84f8b";
@@ -75,4 +75,12 @@ test("start times compare whitespace-insensitively; a different time is a differ
 test("tmux session name is the part before the colon", () => {
   assert.equal(tmuxSession("ipsum-admin:@199.%199"), "ipsum-admin");
   assert.equal(tmuxSession(null), null);
+});
+
+test("tmux sessions: listed names; none when no tmux server runs (a reboot); null when tmux could not say", () => {
+  assert.deepEqual(tmuxNames({ code: 0, stdout: "ipsum-admin\nlorem-admin\n", stderr: "" }), ["ipsum-admin", "lorem-admin"]);
+  assert.deepEqual(tmuxNames({ code: 1, stdout: "", stderr: "no server running on /private/tmp/tmux-501/default\n" }), []);
+  assert.deepEqual(tmuxNames({ code: 1, stdout: "", stderr: "error connecting to /private/tmp/tmux-501/default (No such file or directory)\n" }), []);
+  assert.equal(tmuxNames({ code: "ENOENT", stdout: "", stderr: "" }), null);
+  assert.equal(tmuxNames({ code: 1, stdout: "", stderr: "error connecting to /private/tmp/tmux-501/default (Permission denied)\n" }), null);
 });

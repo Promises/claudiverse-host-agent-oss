@@ -274,7 +274,7 @@ test("spawnRuntime: unset leaves plain spawns on bin; a named runtime brings its
   };
   assert.equal(spawnRuntime({ runtimes }), null);
   assert.deepEqual(spawnRuntime({ runtimes, spawn_runtime: "stock+mod" }),
-    { name: "stock+mod", bin: "/opt/claude/2.1.292", configDir: null, oauthTokenFile: "/home/me/.config/claudiverse/token", poolOnly: false });
+    { name: "stock+mod", bin: "/opt/claude/2.1.292", configDir: null, oauthTokenFile: "/home/me/.config/claudiverse/token", poolOnly: false, pooled: false });
   assert.equal(spawnRuntime({ runtimes: { pool: { bin: "/opt/claude/c", pool_only: true } }, spawn_runtime: "pool" }).poolOnly, true);
   assert.equal(spawnRuntime({ runtimes: { pool: { bin: "/opt/claude/c", pool_only: "yes" } }, spawn_runtime: "pool" }).poolOnly, false, "only a real true");
   assert.equal(spawnRuntime({ runtimes, spawn_runtime: "patched" }).bin, "/opt/claude/claude-rel");
@@ -283,4 +283,11 @@ test("spawnRuntime: unset leaves plain spawns on bin; a named runtime brings its
 test("spawnRuntime: a name that is not one of the machine's runtimes is a config error", () => {
   assert.throws(() => spawnRuntime({ runtimes: {}, spawn_runtime: "stock+mod" }), /not one of this machine's runtimes/);
   assert.throws(() => spawnRuntime({ runtimes: { x: { bin: "relative/claude" } }, spawn_runtime: "x" }), /not one of/);
+});
+
+test("spawnRuntime: spawn_pooled makes plain seats pooled; pool_only implies it; off by default", () => {
+  const runtimes = { "stock+mod": { bin: "/opt/claude/2.1.292" }, pool: { bin: "/opt/claude/2.1.292", pool_only: true } };
+  assert.equal(spawnRuntime({ runtimes, spawn_runtime: "stock+mod" }).pooled, false);
+  assert.equal(spawnRuntime({ runtimes, spawn_runtime: "stock+mod", spawn_pooled: true }).pooled, true);
+  assert.equal(spawnRuntime({ runtimes, spawn_runtime: "pool" }).pooled, true);
 });

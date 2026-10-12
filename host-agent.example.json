@@ -8,6 +8,7 @@
   "cv_spawn": "/Users/me/Documents/projects/claudiverse/orchestrator/cv-spawn.sh",
   "bin": "<optional: the claude binary for spawned seats; default is cv-spawn's>",
   "spawn_runtime": "<optional: a name under runtimes (e.g. stock+mod) that the app's New seat and resume start on, in place of bin>",
+  "spawn_pooled": "<optional: true = the app's New seat and resume send model calls through the server's account pool (--pooled)>",
   "mcp": "<optional: an MCP config for spawned seats, e.g. one giving them the claudiverse cv_* tools>",
   "allow_remote_roots": false,
   "_relay": "Optional: the local relay for a plain `claude` (loopback only). Point the shell at it with claude-relay.zsh / claude-relay.bash, never with settings.json env (that overrides every seat's own routing).",

@@ -39,11 +39,11 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { createRelay } from "./lib/relay.mjs";
 import { CYCLE, footerMode, dialogOpen } from "./lib/mode.mjs";
-import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, tmuxSession } from "./lib/adopt.mjs";
+import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, tmuxSession, tmuxNames } from "./lib/adopt.mjs";
 import { realRoots, listDirs, resolveInRoots, checkSpawn, checkResume, checkStopTitle, findTranscript, addRoot, removeRoot, Refusal,
          machineChoices, checkProfile, mcpConfigFor, isTrusted, trustKey, withTrust, setupDone, withSetupDone, spawnRuntime } from "./lib/rules.mjs";
 
-const VERSION = "0.11.1";
+const VERSION = "0.12.0";
 const CONFIG_PATH = process.env.CLAUDIVERSE_HOST_AGENT_CONFIG || path.join(os.homedir(), ".config/claudiverse/host-agent.json");
 
 function log(...a) {
@@ -244,6 +244,7 @@ async function startPlain(seat) {
   if (rt.configDir) argv.push("--config-dir", rt.configDir);
   if (rt.oauthTokenFile) argv.push("--oauth-token-file", rt.oauthTokenFile);
   if (rt.poolOnly) argv.push("--pool-only");
+  else if (rt.pooled) argv.push("--pooled");
   await ensureTrusted(seat.dir, rt.configDir ? path.join(rt.configDir, ".claude.json") : cfg.claude_json);
   return startSeat({ ...seat, bin: rt.bin, extra: argv, configDir: rt.configDir || cfg.claude_config_dir });
 }
@@ -331,6 +332,20 @@ async function paneSession(title) {
   const children = (await run("pgrep", ["-P", String(pane)])).stdout.split("\n").map(Number).filter(Boolean);
   const pids = new Set([pane, ...children]);
   return sessionRecords(configDirs()).find((r) => pids.has(r.pid)) ?? null;
+}
+
+// The tmux sessions with a Claude Code process in their pane, named at each
+// join: the server's autostart starts a profile whose row still reads running
+// while none lives here (the machine rebooted, the process died). MEASURED
+// 2026-10-11: after an unexpected reboot every profile's row read running, so
+// autostart skipped them all until the agent was restarted by hand. Null when
+// tmux could not say, and the server changes nothing.
+async function liveSeats() {
+  const titles = tmuxNames(await run("tmux", ["list-sessions", "-F", "#{session_name}"]));
+  if (!titles) return null;
+  const live = [];
+  for (const title of titles) if (await paneSession(title)) live.push(title);
+  return live;
 }
 
 // Every seat's mode, read from its footer, reported to the server on change
@@ -548,10 +563,14 @@ function connect() {
   const url = cfg.server.replace(/^http/, "ws").replace(/\/$/, "") + `/socket/websocket?vsn=2.0.0&token=${encodeURIComponent(cfg.host_token)}`;
   ws = new WebSocket(url);
 
-  ws.addEventListener("open", () => {
+  ws.addEventListener("open", async () => {
     backoff = 2000;
     joinRef = String(++ref);
-    ws.send(JSON.stringify([joinRef, joinRef, topic, "phx_join", { roots, version: VERSION, remote_roots: remoteAllowed(), ...machineChoices(cfg, readCatalog()) }]));
+    const jr = joinRef;
+    const live = await liveSeats().catch(() => null);
+    // A socket that closed or rejoined meanwhile is not this join's.
+    if (jr !== joinRef || ws?.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify([joinRef, joinRef, topic, "phx_join", { roots, version: VERSION, remote_roots: remoteAllowed(), ...machineChoices(cfg, readCatalog()), ...(live ? { live_seats: live } : {}) }]));
     clearInterval(heartbeat);
     heartbeat = setInterval(() => send("heartbeat", {}, null, "phoenix"), 30_000);
   });

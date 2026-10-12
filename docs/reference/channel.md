@@ -20,7 +20,7 @@ sequenceDiagram
     participant S as Server (host:my-laptop)
 
     A->>S: WebSocket /socket/websocket?vsn=2.0.0&token=host token
-    A->>S: phx_join {roots, version, remote_roots, modes, runtimes, mcp}
+    A->>S: phx_join {roots, version, remote_roots, modes, runtimes, mcp, live_seats}
     alt token belongs to host:my-laptop
         S-->>A: phx_reply status ok
         Note over A: logs "online as host:my-laptop (roots: ...)"
@@ -62,6 +62,7 @@ The join payload is built fresh on every connect:
 | `modes` | Permission modes this machine allows for profile starts: the config key `modes` filtered to `default`, `acceptEdits`, `plan`, `auto`, or all four when `modes` is unset. |
 | `runtimes` | A list of `{name, version}` for each entry of the config key `runtimes` that has an absolute `bin`; `version` is `null` when not configured. |
 | `mcp` | The names in the MCP catalog file (`mcp_catalog`, default `~/.config/claudiverse/mcp-catalog.json`, key `mcpServers`) that are valid names. |
+| `live_seats` | 0.12.0+: the tmux sessions with a Claude Code process in their pane (the pane's process or its child has a session record in a configured config folder), read at this join. No tmux server, as after a reboot, is `[]`. Left out when tmux could not say (any other `list-sessions` failure), and the server then changes nothing. |
 
 Example:
 
@@ -91,7 +92,7 @@ Confirmed in `HostChannel` and `Hosts` on the server:
 
 - Only that host's own token may join. A seat's shared token, the app token or another host's token gets `{"reason": "this token may not join host:<name>"}` in the `phx_reply` error.
 - A newer connection for the same user and host name replaces an older one: the older channel is told to stop. If it has not let go within about 2 s, it is killed.
-- Once the join completes, the server starts the machine's autostart profiles in the background. Already-running profiles are left alone, a profile whose last start was refused or failed within 10 minutes is skipped, and starts are spaced out (the per-machine spawn interval, 10 s by default, plus 0.5 s). A reconnect is therefore harmless.
+- Once the join completes, the server starts the machine's autostart profiles in the background. Already-running profiles are left alone, unless `live_seats` says otherwise: a profile whose rows read running, all on this machine, with no live seat of its name here (the machine rebooted, its process died) has its rows ended and is started. Before 0.12.0 such a profile was skipped until its rows read stopped and the agent was restarted. a profile whose last start was refused or failed within 10 minutes is skipped, and starts are spaced out (the per-machine spawn interval, 10 s by default, plus 0.5 s). A reconnect is therefore harmless.
 - The server also records the connection's source address and may use it to place seats that did not report their host.
 - The server relays a request to an online host and waits for the reply. The default wait is 10 s; spawns, resumes and profile starts wait up to 120 s and run asynchronously, with the outcome broadcast to the apps. A request to an offline host fails at the server without reaching the agent.
 
